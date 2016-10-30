@@ -1,0 +1,14 @@
+IBM在它的System/360计算机中引入了ISA（Instruction Set Architecture，指令集体系架构）的概念
+ISA常被简称为Architecture（架构），是处理器的一个抽象描述。
+Architecture是处理器的外表，Microarchitecture是处理器的内心。Architecture是设计规范，定义处理器能做什么，
+Microarchitecture是设计实现，描述处理器是怎么实现功能的。
+处理器包括3大部分：内核（core）、存储器（Cache/SRAM）、外设与接口（IO、Clock、Controller）
+	如：指令集 ARMv7->微架构 ARM Coretex-A8->处理器 Samsung S5PC110
+时钟基准：
+	MPIS	（Millions of Instructions Per Second）
+	MFLOPS	（Millions of Floating-point Operations per Second）
+	衡量处理器性能
+综合基准：
+	Whetstone侧重浮点运算
+	Linpack侧重线性代数运算
+	Dhrystone侧重字符串和整数程序（统计1秒内能执行的次数）
