@@ -347,4 +347,334 @@ umask()：改变文件权限掩码
     参数:
         * priority 写入信息的等级和用途
         * format    格式字符串，指定信息输出格式、
-        
+
+            管道
+向管道读数据时，必须关闭写端pipe[1]
+向管道写数据时，必须关闭读端pipe[0]
+
+    有名管道
+如果管道文件大小 > 写入函数的数据的大小，Linux会保证写入的原子性
+如果管道文件大小 < 写入函数的数据的大小，将不保证原子性，一旦有空闲区域就写入部分数据，
+    阻塞直到写操作完成
+
+mkfifo(pathname,mode)
+
+使用命名管道时，写数据时必须有进程在读，读进程时必须有进程在写
+    打开时设置阻塞标志后，如果不满足上述要求，进程会阻塞
+
+        信号
+
+sigemptyset清空信号集中所有信号
+kill函数，信号全局发送
+raise函数，枝江信号发送给进程本身
+abort函数，将SIG_ABORT信号发送给进程
+sigqueue函数，向进程发送一个可带有附加信息的信号
+    int sigqueue(pit_t pid, const union sigval val)
+        typedef union sigval{
+            int sival_int;
+            void *sival_ptr;
+        }sigval_t;
+    调用sigqueue函数时，sigval_t指定的信息会被复制到sa_sigaction的siginfo_t结构中，信号处理函数可以利用这些信息
+
+atoi可以将路径转换为进程标识符
+
+sigalarm(1)；一秒钟后产生闹钟信号
+
+gettitimer(int which, struct itimerval *value);
+settitimer(int which, const struct itimerval *value,
+         struct itimerval *ovalue)
+参数which
+ITIMER_REAL:时间到向进程发送SIGALARM信号
+ITIMER_VIRTUAL:仅在程序执行时计时，时间到向进程发送SIGVALARM信号
+ITIMER_PROF:在进程执行和系统调用时计时，时间到发送SIGPROF信号
+value:设定时间  ovalue:上次设定的时间
+
+        信号集
+操作函数：
+int sigempty(set)
+int sigaddset
+int sigdelset
+int sigfillset
+int sigismember
+int sigemptyset
+int sigprocmask 设置信号屏蔽码
+
+        消息队列
+打开
+    msgget(key, msgflg)
+        key为消息队列的键值，通常是一个长整型，可以设置为任何整数，
+            由用户直接设定，也可以调用ftok生成。如果设为IPC_PRIVATE，
+            表示总是创建新的消息队列
+        msgflg建立消息队列并设定存取权限，
+            IPC_CREAT | 0666 创建一个666消息队列，类似文件
+            IPC_EXCL 只有在指定消息队列不存在时，才创建新的消息队列
+        返回值：成功：消息队列标识符  失败：-1
+    key_t flock(const char *pathname, int proj_id)
+        pathname:进程有存取权限的一个路径
+        proj_id：指定的键值
+    key_t ftok(pathname)
+        将地址转换为键值
+    msgctl(msqid, cmd, struct msqid_ds *buf)
+        smqid消息队列的标识符
+        IPC_STAT:获取状态，返回信息在buf指向的msqid_ds结构中
+        IPC_SET:设置属性，属性存储在buf指向的msqid_ds结构中
+        IPC_RMID:删除消息队列，同时清除其中的所有消息
+消息队列不会自动清理
+查看系统中的消息队列
+    ipcs -q
+
+读写消息队列
+    int msgsnd(int msqid， struct msgbuf *msgp, int msgsz, int msgflg)
+        msqid消息队列标志符
+        写入信息在msgp指向的msgbuf结构中
+        大小由msgsz决定
+        msgflg控制空间不足时的执行动作
+            struct msgbuf
+            {
+                long mtype;     /*消息的类型*/
+                char mtext[];   /*消息的内容*/
+            }
+msgrcv(int msqid， struct msgbuf *msgp, int msgsz,
+        long msgtyp, int msgflg)
+    msgtyp为请求读取的数据类型
+    msgtyp=0 返回消息队列的第一个消息
+    msgtyp>0 返回该类型的第一个消息
+    msgtyp<0 在类型值<=msgtyp的所有消息中，返回类型值最小的一个
+
+即使没有读文件，消息队列也能顺利写入
+可以通过判断消息类型，只接收特定进程的消息
+
+            信号量
+大于或等于0时，表示可供并发进程使用的资源数；小于0时表示正等待使用资源的进程数
+如果进程需要访问某共享资源
+    操作：
+        * 测试控制该信号量
+        * 如果大于0，访问该资源，并将信号量减一
+        * 如果小于或等于0，进入休眠状态，直至信号量大于0被唤醒
+        * 进程不再使用共享资源时，将信号量加一，此时如果有等待的进程，将它们唤醒
+函数
+    semget(key, nsems, semflg)
+        键值自设，nsems元素个数，通常1，semflg创建信号量并设权限
+    semctl(semid, semnum, cmd, arg)
+        semid信号量标识符
+        semnum元素个数
+        cmd控制命令，信号量的创建或删除
+        arg操作值
+            union semun{
+            int val;    /*信号量的值*/
+            struct semid_ds *buf;
+            unsigned short int *array; /*所有信号量的值*/
+            struct seminfo *__buf;
+            }
+    semop(int semid, struct sembuf *sops, 
+            unsigned short nsops)操作信号量
+        sops为指向信号量操作数组的指针
+        nsops为数组中元素个数
+
+        struct sembuf{
+            short int sem_num; 要操作信号量在信号量集中的序号
+            short int sem_op;  执行的操作
+                负数：本进程希望使用该资源，将该负数加到相应信号量上
+                        如果相加结果为负数，进程阻塞，一直等待变为0
+            short int sem_flg; 
+        }
+
+ipcs -s 显示创建的信号量集
+
+            共享内存
+创建打开共享内存
+    shmget(get, size, shmflg)
+        size共享内存的大小，创建时必须指定
+        shmflg创建共享内存并获取权限
+        返回值：成功：共享内存标识符  失败：-1
+    shmctl(int shmid, int cmd, struct shmid_d *buf)
+        控制共享内存，类似msgctl
+
+进程不能直接访问共享内存，需要调用
+    shmat(int shm_id, void *shm_addr, int shmflg)
+        映射到进程的地址空间
+    shmdt(void *shmaddr)
+        脱离进程的地址空间
+
+
+        多线程
+
+#include <pthread.h>
+创建新线程
+int pthread_create(pthread_t *thread, 
+                    const pthread_attr_t *attr,
+                    void *(*start_routine) (void *),
+                    void *arg)
+    * thread : 定义的线程对象，从中获取线程标识符
+    * attr : 传入线程的属性结构体，默认则NULL
+    * void * : 新线程执行（void *）中的代码
+    * arg : 创给新线程的参数
+合并线程(减少分别访问线程的资源浪费)
+int pthread_join(pthread_t __th,void **__thread_return)
+    函数一直阻塞到被等待线程结束，当它返回时，被等待线程的全部资源会被收回
+    __th 为被等待线程的标识符，
+    return 存储被等待线程的返回值
+
+终止线程
+本线程调用pthread_exit(void *__retval)
+其它线程调用pthread_cancel(pthread_t __th)
+pthread_setcanceltype()，设置被其他线程取消的方式 是否可以被取消
+
+线程属性
+int pthread_attr_init(pthread_attr_t *__attr)
+typedef union
+{
+    char size[__SIZEOF_PTHREAD_ATTR_T]; 
+    long int __align;
+}pthread_attr_t;
+
+设置线程分离状态
+pthread_attr_setdetachstate,默认非分离线程
+有时新线程执行过快，在create函数返回之前结束，引发错误
+    可以加入pthread_cond_timewait或sleep函数,延长时间
+
+线程的优先级
+#include <bits/sched.h>
+struct sched_param
+{
+    int __sched_param;
+};
+pthread_attr_getschedparam
+pthread_attr_setschedparam
+一般先读取->修改->回填
+
+线程同步  为了解决资源竞争
+三种方法
+* 互斥量
+    - 使用
+        + int pthread_mutex_init(pthread_mutex_t *__mutex,
+                        __const pthread_mutexattr_t * __mutexattr)
+            - __mutex : 互斥信号量指针
+            - __mutexattr : 属性结构
+    - 释放
+        + pthread_mutex_destroy(pthread_mutex_t *__mutex)
+    - 加解锁
+        + pthread_mutex_lock(pthread_mutex_t *__mutex)
+        + pthread_mutex_unlock(pthread_mutex_t *__mutex)
+* 信号量
+* 条件变量
+    - pthread_cond_init(pthread_mutex_t *__cond,
+                        __const pthread_mutexattr_t * __condattr
+    - pthread_cond_destroy(pthread_mutex_t *__cond)
+    - pthread_cond_wait
+    - pthread_cond_timedwait
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                网络编程
+
+OSI(Open System Interconnection)开放系统互联模型
+层级（递增）      功能
+物理层          比特流传输 （不管含义）
+数据链路层      介质访问、链路管理（约定含义）
+网络层          寻址和路由选择
+传输层         建立端到端连接（可检测丢失的包，重传请求、整理收到的包）
+会话层         建立、维护和管理主机间的会话
+表示层         提供应用程序间通信（变换传输的数据、相互理解、数据压缩、加密、格式转换）
+应用层         处理数据格式、数据加密（应用层与应用程序界面沟通）
+
+封装Encapsulation
+分用Demultiplexing
+
+众所周知端口：0~1023由IANA分配和控制
+注册端口：1024~49151不受IANA控制，但由IANA登记并提供使用清单
+动态或私有端口：49152~65535，与IANA无关
+
+IP->MAC 地址解析协议（ARP）
+MAC->IP 反向地址解析协议（PARP）（无盘工作站向PARP服务器询问自己的IP地址）
+
+ICMP协议用于传递差错信息、时间、回显、网络信息等控制数据
+    ping即封装成ICMP协议来实现
+
+
+        Socket编程
+
+Socket编程步骤
+
+1.创建套接字，socket函数
+2.初始化地址
+    struct sockaddr_in sevaddr;结构体填充
+    bind函数绑定 socket函数返回的套接字描述符 和 IP地址
+3.监听套接字listen
+    属被动套接字，可以被连接
+    (套接字描述符，队列最大值（已完成队列+未完成队列（三次握手未成功的））)
+4.接受连接accept
+    属主动套接字，用来通信，不能用来监听
+
+TCP是基于流的协议，需要处理黏包问题（数据之间通过协议分割）
+基于字节流传输，只维护发送出去多少，确认了多少，并不维护消息边界
+
+服务器端套接字在绑定时确定
+客户端在连接成功时确定
+
+inet_ntoa 转换成点分十进制 xxx.xxx.xxx.xxx
+
+REUSEADDR：
+    设置setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &(1), sizeof(1));
+    可以使服务器端断开后进入WAIT状态时，仍然可以重启
+
+网络字节序：大端模式
+**只要是网络发送整数，就需要统一字节序**
+    需要转化成主机字节序
+        ntohl()函数
+
+聊天程序：
+    一个进程用来接收，一个子进程用来输入
+    通过信号来通知另一个进程来关闭
+
+recv/send函数，只能读取socket描述符
+    可以用MSG_PEEK读取时不清除socket缓冲区内的内容
+
+获取名称和IP信息的函数
+getsockname、getpeername
+gethostname、gethostbyname、gethostbyaddr
+
+僵尸进程
+1. 通过忽略SIG_CHLD信号  signal(SIG_CHLD, SIG_IGN)
+2. 通过捕捉SIG_CHLD信号，进行处理signal(SIG_CHLD, chld_handler)
+
+两边同时关闭，会进入CLOSING状态
+
+往一个已经接受FIN的套接字中写是允许的，FIN仅仅代表对方不再发送数据
+    此时如果再向对方发送数据，会导致TCP重置，会收到RST信号，再write会产生SIGPIPE
+    信号，这个信号通常可以忽略，默认终止进程，也能 signal(SIGPIPE, SIG_IGN)
+
+可以把socket看做一条全双工管道，而一条读管道的进程已经被关闭，此时再写会产生RST，第二次    写会报SIGPIPE的管道错误信号
+
+当socket的引用数减为0时，才向对方发送FIN段
+shutdown可以之关闭单一方向或全关闭，并且确保对方接收到
